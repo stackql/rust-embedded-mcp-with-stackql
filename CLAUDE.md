@@ -41,9 +41,11 @@ Two agents, modelled on the Python and Node agents in `clickhouse-stackql-demo/d
 1. `embedded/sre-agent-sidecar` - sidecar (slide "SIDECAR DETAILED"): Claude via rig's anthropic provider (`ANTHROPIC_API_KEY`, `SRE_AGENT_MODEL`, default `claude-opus-5`); providers `aws` + `cloudflare`; the task is the morning assurance sweep over the service footprint (health, exposure, edge, governance), PASS or ATTENTION per check with the fixing SQL shown, not run. `--check` preflights without a model call; a positional argument replaces the task. Show the cache dir before and after the first run, `stacks/service-footprint/drift.sh tag ssh edge dangling`, the sweep again, then `stackql-deploy build` to converge.
 2. `embedded/finops-agent-vendored` - vendored (slide "VENDORED DETAILED"): same program with `bundle_bytes(include_bundle!())`, `build.rs` fetches the bundle at build time; GPT-5 via rig's openai provider (`OPENAI_API_KEY`, `FINOPS_AGENT_MODEL`, default `gpt-5`); provider `aws`; the task is the month-to-date FinOps report (Cost Explorer spend by service, compute inventory and tagging gaps, waste: stopped instances, available volumes, unassociated EIPs). Show the binary sizes and a `--check` on a fresh `HOME`.
 
-Safety modes get called out during step 1: `ReadOnly` (default) -> `Safe` -> `DeleteSafe` -> `FullAccess`, escalation is a caller opt-in via `.mode(...)`; `Safe` asks the client for approval before every write (deletes included), `DeleteSafe` only for deletes, over MCP elicitation; a client that cannot answer gets a refusal. Neither agent escalates; the human-in-the-loop write path needs an rmcp `ClientHandler` that answers elicitation, spawned via `Builder::command()`.
+Safety modes get called out during step 1: `ReadOnly` (default) -> `Safe` -> `DeleteSafe` -> `FullAccess`, escalation is a caller opt-in via `.mode(...)`; `Safe` asks the client for approval before every write (deletes included), `DeleteSafe` only for deletes, over MCP elicitation; a client that cannot answer gets a refusal. Neither agent escalates; the human-in-the-loop write path needs an rmcp `ClientHandler` that answers elicitation, spawned via `Builder::command()`. The companion `embedded/steward` (`fix` subcommand, `src/embed.rs`) is that path, outside the talk flow.
 
-Crate versions: `stackql-mcp = "0.10"` (pin the minor); `rig-core = "0.40"` with the `rmcp` feature, the last rig release that has it (0.41 dropped it), resolving with `stackql-mcp` on one `rmcp` 1.x. Everything else floats on the latest 1.x/4.x.
+The workspace also builds five companion examples that are not in the talk flow and are documented in `embedded/README.md`: `minimal` and `minimal-vendored` (the smallest embedding, no model, zero credentials), `steward` (policy-driven agent, human-approved writes), `auditron` (YAML control packs in `controls/`, live TUI, evidence zips, no agent loop) and `stackql-agent` (REPL with three personas over public GitHub data). They are reference apps, not demo steps; the runbook and the deck do not mention them.
+
+Crate versions: `stackql-mcp = "0.10"` (pin the minor); `rig-core = "0.40"` with the `rmcp` feature, the last rig release that has it (0.41 dropped it), resolving with `stackql-mcp` on one `rmcp` 1.x. Everything else floats on the latest 1.x/4.x. The companions `steward` and `stackql-agent` pin `rig-core = "0.38"` in their own manifests, the release they were written against; cargo builds both rig versions side by side.
 
 ## Repo layout
 
@@ -66,7 +68,14 @@ rust-embedded-mcp-with-stackql/
                              dependency bump - never reintroduce a git pin)
     sre-agent-sidecar/               sidecar + Claude: src/main.rs, prompts/system.md, prompts/task.md
     finops-agent-vendored/            vendored + GPT-5: src/main.rs, build.rs, prompts/system.md, prompts/task.md
-    README.md                the wiring, sidecar vs vendored, safety modes, prompts
+    minimal/, minimal-vendored/      companion examples, not in the talk flow: the smallest embedding, no model,
+                             zero credentials (github null_auth), one per way of embedding
+    steward/                 companion: policy-driven agent (policies/*.md), the human-in-the-loop write path
+                             (Safe / DeleteSafe, elicitation answered at the terminal in src/embed.rs)
+    auditron/                companion: YAML control packs (controls/), live TUI, evidence zips, no agent loop
+    stackql-agent/           companion: REPL with three personas over public GitHub data, zero credentials
+    README.md                the wiring, sidecar vs vendored, safety modes, prompts, companion examples
+  controls/github-core.yaml  auditron's built-in control pack, compiled in with include_str!
   .github/workflows/ci.yml   fmt, clippy -D warnings, build, --check smokes, agent-live (one question each)
 ```
 
@@ -85,8 +94,8 @@ Code:
 
 - Rust 2021 edition, MSRV 1.88 (set by `rmcp` 1.x via `stackql-mcp`).
 - `cargo fmt` and `cargo clippy --all-targets -- -D warnings` clean before commit (run in `embedded/`).
-- Examples are deliberately small. Each agent is one source file and two prompt files; if it grows past that it has stopped being a demo. Sidecar and vendored must stay a diff of a few lines.
-- Every runnable thing has a comment at the top saying which act and slide it belongs to.
+- Examples are deliberately small. Each agent is one source file and two prompt files; if it grows past that it has stopped being a demo. Sidecar and vendored must stay a diff of a few lines. That rule is for the two demo agents; the companion examples under `embedded/` are reference apps and may be bigger, but they pass the same fmt and clippy gates.
+- Every runnable thing has a comment at the top saying which act and slide it belongs to, or that it is a companion example outside the talk flow.
 - No credentials in the repo. `.env.example` documents variables; `.env` is gitignored.
 
 Shell scripts (there is one, `stacks/service-footprint/drift.sh`; anything else that can be a runbook line is a runbook line, not a script):
@@ -105,7 +114,7 @@ Shell scripts (there is one, `stacks/service-footprint/drift.sh`; anything else 
 
 ## CI
 
-`.github/workflows/ci.yml`, on every push to main and PR. `build-test`: fmt, clippy `-D warnings`, workspace build (finops-agent-vendored's build.rs downloads and pin-verifies the bundle - network needed), then zero-credential smokes: `sre-agent-sidecar --check`, `finops-agent-vendored --check`. `agent-live` asks each agent one question that needs no cloud credentials (server mode and installed providers); the `ANTHROPIC_API_KEY` org secret is configured, so pushes make one small Claude call; the finops step skips until an `OPENAI_API_KEY` secret is added.
+`.github/workflows/ci.yml`, on every push to main and PR. `build-test`: fmt, clippy `-D warnings`, workspace build (finops-agent-vendored's build.rs downloads and pin-verifies the bundle - network needed; the build and clippy steps compile the companion examples too, which have no smoke steps), then zero-credential smokes: `sre-agent-sidecar --check`, `finops-agent-vendored --check`. `agent-live` asks each agent one question that needs no cloud credentials (server mode and installed providers); the `ANTHROPIC_API_KEY` org secret is configured, so pushes make one small Claude call; the finops step skips until an `OPENAI_API_KEY` secret is added.
 
 ## Working in this repo with Claude
 

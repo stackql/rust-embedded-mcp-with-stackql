@@ -1,0 +1,28 @@
+[package]
+name = "steward"
+version = "0.1.0"
+description = "Platform-engineering agent that keeps repositories on the golden path, on an embedded StackQL MCP server"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+default = []
+# Single-binary build: the .mcpb is compiled in (see build.rs).
+vendored = ["stackql-mcp/vendored"]
+
+[dependencies]
+stackql-mcp = { workspace = true }
+# transport-async-rw: embed.rs serves the spawned server over its stdio pipes.
+rmcp = { workspace = true, features = ["transport-async-rw"] }
+# rig-core's lib is `rig_core`; rename to `rig` to match rig's docs.
+rig = { package = "rig-core", version = "0.38", features = ["rmcp"] }
+tokio = { workspace = true, features = ["io-std", "io-util", "process"] }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+clap = { version = "4", features = ["derive", "env"] }
+futures = "0.3"
+
+[build-dependencies]
+stackql-mcp = { workspace = true, features = ["sidecar"] }

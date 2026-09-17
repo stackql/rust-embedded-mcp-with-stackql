@@ -3,9 +3,26 @@
 # Claude; finops-agent-vendored vendors the server straight into the binary and talks
 # to GPT-5. Model, prompts (compiled-in markdown), context and MCP tools in
 # each; the loop is rig's.
+#
+# The other members are companion examples outside the talk flow, kept because
+# each shows something the two agents do not: minimal and minimal-vendored (the
+# smallest embedding, no model), steward (policy-driven agent with the
+# human-in-the-loop write path over MCP elicitation), auditron (YAML control
+# packs, live TUI, evidence zips, no agent loop) and stackql-agent (REPL with
+# three personas over public GitHub data, zero credentials). steward and
+# stackql-agent pin rig-core 0.38 in their own manifests, the release they were
+# written against; cargo builds both rig versions side by side.
 [workspace]
 resolver = "2"
-members = ["sre-agent-sidecar", "finops-agent-vendored"]
+members = [
+    "sre-agent-sidecar",
+    "finops-agent-vendored",
+    "minimal",
+    "minimal-vendored",
+    "steward",
+    "auditron",
+    "stackql-agent",
+]
 
 [workspace.package]
 edition = "2021"
